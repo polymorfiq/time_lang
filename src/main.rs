@@ -123,7 +123,7 @@ reg_gateway         A,GenAlphabet(A),GenClock(A);
 reg_gateway         B,GenAlphabet(A),GenClock(A);
 reg_exit            E,GenAlphabet(A),GenClock(A);
 
-connect             sync2(A, B),SYNCED;
+connect             sync2(A|B),SYNCED;
 reg_exit_gateway    SYNCED(C),C;
 reg_exit_gateway    SYNCED(D),D;
 
@@ -136,7 +136,7 @@ mod parser;
 use parser::Parser;
 
 fn main() {
-    let mut parser = Parser::new();
+    let mut parser = Parser::new("program");
     let reader = BufReader::new(PROGRAM.as_bytes());
 
     for line in reader.lines() {

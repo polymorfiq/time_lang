@@ -25,14 +25,14 @@ impl State {
         }
     }
 
-    pub fn process_command(&mut self, cmd: &str, args: &[&str]) {
+    pub fn process_command(&mut self, filename: &str, lineno: usize, cmd: &str, args: &[&str]) {
         use State::*;
 
         match self {
             General => panic!("General - Unknown command: {} ({:?})", cmd, args),
-            Alphabet(alphabet) => alphabet.process_command(cmd, args),
-            Clock(clock) => clock.process_command(cmd, args),
-            Program(prog) => prog.process_command(cmd, args),
+            Alphabet(alphabet) => alphabet.process_command(filename, lineno, cmd, args),
+            Clock(clock) => clock.process_command(filename, lineno, cmd, args),
+            Program(prog) => prog.process_command(filename, lineno, cmd, args),
         }
     }
 }

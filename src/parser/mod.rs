@@ -5,20 +5,25 @@ use regex::Regex;
 static COMMENT_REGEX: &str = r"^(#+)(?<comment>.*)(#*)$";
 static CMD_REGEX: &str = r"^(?<cmd>[a-zA-Z0-9_]+)([\s]+(?<args>.+))?;$";
 
-pub struct Parser {
+pub struct Parser<'a> {
+    filename: &'a str,
     state: State,
-    source: String
+    source: String,
+    lineno: usize
 }
 
-impl Parser {
-    pub const fn new() -> Self {
+impl<'a> Parser<'a> {
+    pub const fn new(filename: &'a str) -> Self {
         Self{
+            filename: filename,
             state: State::General,
-            source: String::new()
+            source: String::new(),
+            lineno: 0
         }
     }
 
     pub fn parse_line(&mut self, line: String) {
+        self.lineno += 1;
         let cmd_re = Regex::new(CMD_REGEX).unwrap();
         let comment_re = Regex::new(COMMENT_REGEX).unwrap();
 
@@ -30,7 +35,7 @@ impl Parser {
                 ("defclock", [name]) => self.start_state(State::clock(name.to_string())),
                 ("defprogram", [name]) => self.start_state(State::program(name.to_string())),
                 (cmd, args) => {
-                    self.state.process_command(cmd, args);
+                    self.state.process_command(self.filename, self.lineno, cmd, args);
                 }
             }
         } else if let Some(_comment) = comment_re.captures(&line) {

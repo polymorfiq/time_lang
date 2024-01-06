@@ -1,14 +1,82 @@
+enum Instruction {
+    StartMoment(String, String),
+    PushMoment(String, String),
+    PushChar(String, String),
+    Label(String),
+    JumpLessThan(String, String, String),
+    JumpGreaterThan(String, String, String),
+    ForwardDuration(String, String),
+    Connect(String, String),
+    ExitGateway(String, String)
+}
+
 pub struct Program {
-    name: String
+    name: String,
+    instructions: Vec<Instruction>,
+    gateways: Vec<(String, String, String)>,
+    exits: Vec<(String, String, String)>
 }
 
 impl Program {
     pub const fn new(name: String) -> Self {
-        Self{name: name}
+        Self{
+            name: name,
+            instructions: vec![],
+            gateways: vec![],
+            exits: vec![]
+        }
     }
 
-    pub fn process_command(&mut self, cmd: &str, args: &[&str]) {
-        panic!("Program ({}) - unknown command: {} ({:?})", self.name, cmd, args);
+    pub fn process_command(&mut self, filename: &str, lineno: usize, cmd: &str, args: &[&str]) {
+        match (cmd, args) {
+            ("start_moment", [moment, exit]) => {
+                self.instructions.push(Instruction::StartMoment(moment.to_string(), exit.to_string()));
+            },
+
+            ("reg_gateway", [name, alphabet, clock]) => {
+                self.gateways.push((name.to_string(), alphabet.to_string(), clock.to_string()));
+            },
+
+            ("reg_exit", [name, alphabet, clock]) => {
+                self.exits.push((name.to_string(), alphabet.to_string(), clock.to_string()));
+            },
+
+            ("reg_exit_gateway", [connected_name, gateway]) => {
+                self.instructions.push(Instruction::ExitGateway(connected_name.to_string(), gateway.to_string()));
+            },
+
+            ("label", [name]) => {
+                self.instructions.push(Instruction::Label(name.to_string()));
+            },
+
+            ("jlt", [label_name, a, b]) => {
+                self.instructions.push(Instruction::JumpLessThan(label_name.to_string(), a.to_string(), b.to_string()));
+            },
+
+            ("jgt", [label_name, a, b]) => {
+                self.instructions.push(Instruction::JumpGreaterThan(label_name.to_string(), a.to_string(), b.to_string()));
+            },
+
+            ("push_moment", [moment_incr, exit]) => {
+                self.instructions.push(Instruction::PushMoment(moment_incr.to_string(), exit.to_string()));
+            },
+
+            ("push_char", [chr, exit]) => {
+                self.instructions.push(Instruction::PushChar(chr.to_string(), exit.to_string()));
+            },
+
+            ("forward_duration", [gateway, exit]) => {
+                self.instructions.push(Instruction::ForwardDuration(gateway.to_string(), exit.to_string()));
+            },
+
+            ("connect", [program, name]) => {
+                self.instructions.push(Instruction::Connect(program.to_string(), name.to_string()));
+            },
+
+            _ => {
+                panic!("{}:{} Program ({}) - unknown command: {} ({:?})", filename, lineno, self.name, cmd, args);
+            }
+        }
     }
 
     pub fn generate(&self) -> String {
