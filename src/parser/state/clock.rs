@@ -1,23 +1,22 @@
+use quote::{format_ident, quote};
+use convert_case::{Case, Casing};
+
+#[derive(Debug)]
 pub struct Clock {
     name: String,
-    bits: Option<u64>,
+    moment_type: Option<String>,
     repr: Option<String>
 }
 
 impl Clock {
     pub const fn new(name: String) -> Self {
-        Self{name: name, bits: None, repr: None}
+        Self{name: name, moment_type: None, repr: None}
     }
 
     pub fn process_command(&mut self, filename: &str, lineno: usize, cmd: &str, args: &[&str]) {
         match (cmd, args) {
-            ("set_clock_bits", [num_bits]) => {
-                let num_bits = num_bits.parse().expect("num_bits needs to be a u64");
-                if num_bits % 8 != 0 {
-                    panic!("{}:{} set_clock_bits ({} invalid) - Must be divisible by 8", filename, lineno, num_bits);
-                }
-
-                self.bits = Some(num_bits);
+            ("set_moment_type", [moment_type]) => {
+                self.moment_type = Some(moment_type.to_string());
             },
 
             ("set_clock_repr", [repr]) => {
@@ -30,7 +29,38 @@ impl Clock {
         }
     }
 
-    pub fn generate(&self) -> String {
-        "".to_string()
+    pub fn generate(&self) -> Result<String, String> {
+        let moment_enum = format_ident!("{}", if let Some(repr) = self.repr.as_ref() { repr.clone() } else {
+            return Err(format!("Never called set_clock_repr on Clock ({})", self.name).to_string())
+        }.to_case(Case::Pascal));
+
+        let struct_name = format_ident!("Clock{}", self.name.to_case(Case::Pascal));
+
+        let moment_rep = format_ident!("{}", if let Some(ct) = self.moment_type.as_ref() { ct.clone() } else {
+            return Err(format!("Never called set_moment_type on Clock ({})", self.name).to_string())
+        });
+
+        let formatted = rustfmt_wrapper::rustfmt(quote! {
+            struct #struct_name {}
+
+            impl #struct_name {
+                const fn to_moment(rep: #moment_rep) -> ClockMoment<#moment_rep> {
+                    ClockMoment::#moment_enum(rep)
+                }
+            }
+
+            impl ClockLike<#moment_rep> for #struct_name {
+                fn to_moment(rep: #moment_rep) -> ClockMoment<#moment_rep> {
+                    <#struct_name>::to_moment(rep)
+                }
+            }
+
+            impl AddableClockLike<#moment_rep> for #struct_name {}
+        });
+
+        match formatted {
+            Ok(formatted_str) => Ok(formatted_str),
+            err => Err(format!("Error generating Clock({}):\n{:?}", self.name, err))
+        }
     }
 }

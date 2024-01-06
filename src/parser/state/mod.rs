@@ -2,6 +2,7 @@ mod alphabet;
 mod clock;
 mod program;
 
+#[derive(Debug)]
 pub enum State {
     General,
     Alphabet(alphabet::Alphabet),
@@ -14,11 +15,11 @@ impl State {
     pub const fn clock(name: String) -> Self { Self::Clock(clock::Clock::new(name)) }
     pub const fn program(name: String) -> Self { Self::Program(program::Program::new(name)) }
 
-    pub fn generate(&self) -> String {
+    pub fn generate(&self) -> Result<String, String> {
         use State::*;
 
         match self {
-            General => "".to_string(),
+            General => Ok("".to_string()),
             Alphabet(alphabet) => alphabet.generate(),
             Clock(clock) => clock.generate(),
             Program(prog) => prog.generate(),

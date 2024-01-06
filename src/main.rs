@@ -13,7 +13,7 @@ static PROGRAM: &str = r#"
 defalphabet ASCII;
 
 # Defines the maximum number of bits a 'character' (atom of data) might take up
-set_alphabet_bits   8;
+set_char_type   u8;
 
 # Defines the 'characters' that can move through a stream
 def_char            0x0,NULL_BYTE;
@@ -27,7 +27,7 @@ def_char            0x5,INQUIRY;
 defclock CounterClock;
 
 # Defines the maximum number of bits that a moment of time might take up
-set_clock_bits      32;
+set_moment_type      u32;
 
 # Defines what kind of thing the clock represents, could also be:
     UNIX_TIMESTAMP
@@ -145,5 +145,13 @@ fn main() {
         }
     }
 
-    println!("{}", parser.generate());
+    match parser.generate() {
+        Ok(source) => {
+            println!("{}", source);
+        }
+
+        Err(err) => {
+            panic!("Parsing Error:\n{}", err);
+        }
+    }
 }

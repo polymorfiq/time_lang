@@ -1,3 +1,6 @@
+use quote::{format_ident, quote};
+
+#[derive(Debug)]
 enum Instruction {
     StartMoment(String, String),
     PushMoment(String, String),
@@ -10,6 +13,7 @@ enum Instruction {
     ExitGateway(String, String)
 }
 
+#[derive(Debug)]
 pub struct Program {
     name: String,
     instructions: Vec<Instruction>,
@@ -79,7 +83,7 @@ impl Program {
         }
     }
 
-    pub fn generate(&self) -> String {
-        "".to_string()
+    pub fn generate(&self) -> Result<String, String> {
+        Ok("".to_string())
     }
 }

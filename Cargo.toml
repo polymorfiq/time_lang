@@ -7,3 +7,8 @@ edition = "2021"
 
 [dependencies]
 regex = "1.10.2"
+quote = "1.0"
+syn = "2.0"
+rustfmt-wrapper = "0.2.1"
+convert_case = "0.6"
+proc-macro2 = "1.0.76"
