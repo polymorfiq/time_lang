@@ -127,6 +127,7 @@ connect             sync2(A|B),SYNCED;
 reg_exit_gateway    SYNCED(C),C;
 reg_exit_gateway    SYNCED(D),D;
 
+label main;
 forward_duration    C,E;
 forward_duration    D,E;
 push_moment         Time(C),E;

@@ -34,7 +34,6 @@ impl Alphabet {
             return Err(format!("Never called set_char_type on Alphabet ({})", self.name).to_string())
         });
 
-        let char_rep_name = format_ident!("CharRep{}", self.name.to_case(Case::Pascal));
         let char_enum_name = format_ident!("Char{}", self.name.to_case(Case::Pascal));
         let struct_name = format_ident!("Alphabet{}", self.name.to_case(Case::Pascal));
 
@@ -43,6 +42,14 @@ impl Alphabet {
 
             quote!{
                 #rep_enum(),
+            }
+        }).collect();
+
+        let char_name_matches: Vec<_> = self.chars.iter().map(|(_char_rep_val, char_name)| {
+            let rep_enum = format_ident!("{}", char_name.to_case(Case::Pascal));
+
+            quote!{
+                #char_name => Ok(#rep_enum()),
             }
         }).collect();
 
@@ -55,35 +62,70 @@ impl Alphabet {
             }
         }).collect();
 
+        let char_to_val_matches: Vec<_> = self.chars.iter().map(|(char_rep_val, char_name)| {
+            let rep_enum = format_ident!("{}", char_name.to_case(Case::Pascal));
+            let lit_rep: proc_macro2::TokenStream = char_rep_val.parse().unwrap();
+
+            quote!{
+                #rep_enum() => #lit_rep as #char_rep,
+            }
+        }).collect();
+
         let formatted = rustfmt_wrapper::rustfmt(quote! {
-            type #char_rep_name = #char_rep;
+            #[derive(Copy, Clone, Debug)]
             pub enum #char_enum_name {
                 #(#char_enums)*
             }
 
             pub struct #struct_name {}
+            
             impl #struct_name {
+                fn char_with_name(name: &str) -> Result<#char_enum_name, AlphabetError<&str>> {
+                    use #char_enum_name::*;
+                    match name {
+                        #(#char_name_matches)*
+                        _ => Err(AlphabetError::NameNotFound())
+                    }
+                }
+
                 const fn to_char(rep: #char_rep) -> Result<#char_enum_name, AlphabetError<#char_rep>> {
                     use #char_enum_name::*;
-                    
-                    
                     match rep {
                         #(#char_matches)*
                         _ => Err(AlphabetError::UnknownCharacter(rep))
                     }
                 }
+
+                const fn to_val(chr: #char_enum_name) -> #char_rep {
+                    use #char_enum_name::*;
+                    match chr {
+                        #(#char_to_val_matches)*
+                    }
+                }
             }
 
-            impl AlphabetLike<#char_rep, #char_enum_name> for #struct_name {
+            impl AlphabetLike for #struct_name {
+                type CharRep = #char_rep;
+                type CharEnum = #char_enum_name;
+
+                fn char_with_name(name: &str) -> Result<#char_enum_name, AlphabetError<&str>> {
+                    <#struct_name>::char_with_name(name)
+                }
+
                 fn to_char(rep: #char_rep) -> Result<#char_enum_name, AlphabetError<#char_rep>> {
                     <#struct_name>::to_char(rep)
+                }
+
+                fn to_val(chr: #char_enum_name) -> #char_rep {
+                    <#struct_name>::to_val(chr)
                 }
             }
         });
 
         match formatted {
             Ok(formatted_str) => Ok(formatted_str),
-            err => Err(format!("Error generating Alphabet({}):\n{:?}", self.name, err))
+            Err(rustfmt_wrapper::Error::Rustfmt(err)) => Err(format!("Error formatting Alphabet({}):\n{}", self.name, err)),
+            Err(err) => Err(format!("Error generating Alphabet({}):\n{}", self.name, err))
         }
     }
 }
