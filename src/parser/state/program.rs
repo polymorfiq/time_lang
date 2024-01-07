@@ -6,6 +6,7 @@ pub enum Instruction {
     StartMoment(String, String),
     PushMoment(String, String),
     PushChar(String, String),
+    PushVal(String, String),
     Label(String),
     JumpLessThan(String, String, String),
     JumpGreaterThan(String, String, String),
@@ -76,6 +77,10 @@ impl Program {
                 latest_func.1.push(Instruction::PushChar(chr.to_string(), exit.to_string()));
             },
 
+            ("push_val", [chr, exit]) => {
+                latest_func.1.push(Instruction::PushVal(chr.to_string(), exit.to_string()));
+            },
+
             ("forward_duration", [gateway, exit]) => {
                 latest_func.1.push(Instruction::ForwardDuration(gateway.to_string(), exit.to_string()));
             },
@@ -115,10 +120,19 @@ impl Program {
     pub fn instruction_call(&self, instruction: &Instruction) -> proc_macro2::TokenStream {
         match instruction {
             Instruction::PushChar(chr, exit_name) => {
+                let (_, alphabet, _, _) = self.exits.iter().find(|(name, _, _, _)| {
+                    name == exit_name
+                }).unwrap_or_else(|| {
+                    panic!("Could not find Exit ({}) for Program ({})", exit_name, self.name);
+                });
+
+                let alphabet_name = format_ident!("Alphabet{}", alphabet.to_case(Case::Pascal));
+                let enum_name = format_ident!("{}", chr.to_case(Case::Pascal));
                 let exit_field = format_ident!("exit_{}", exit_name.to_case(Case::Snake));
+                let error_message = format!("Could not push_char ({:?})", chr);
 
                 quote!{
-                    self.#exit_field.push_with_name(#chr).expect("Could not push #chr");
+                    self.#exit_field.push(<#alphabet_name as AlphabetLike>::CharEnum::#enum_name()).expect(#error_message);
                 }
             },
 
