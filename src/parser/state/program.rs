@@ -1,4 +1,5 @@
 use quote::{format_ident, quote};
+use convert_case::{Case, Casing};
 
 #[derive(Debug)]
 enum Instruction {
@@ -17,8 +18,8 @@ enum Instruction {
 pub struct Program {
     name: String,
     instructions: Vec<Instruction>,
-    gateways: Vec<(String, String, String)>,
-    exits: Vec<(String, String, String)>
+    gateways: Vec<(String, String, String, String)>,
+    exits: Vec<(String, String, String, String)>
 }
 
 impl Program {
@@ -37,12 +38,12 @@ impl Program {
                 self.instructions.push(Instruction::StartMoment(moment.to_string(), exit.to_string()));
             },
 
-            ("reg_gateway", [name, alphabet, clock]) => {
-                self.gateways.push((name.to_string(), alphabet.to_string(), clock.to_string()));
+            ("reg_gateway", [name, alphabet, clock, buf_size]) => {
+                self.gateways.push((name.to_string(), alphabet.to_string(), clock.to_string(), buf_size.to_string()));
             },
 
-            ("reg_exit", [name, alphabet, clock]) => {
-                self.exits.push((name.to_string(), alphabet.to_string(), clock.to_string()));
+            ("reg_exit", [name, alphabet, clock, buf_size]) => {
+                self.exits.push((name.to_string(), alphabet.to_string(), clock.to_string(), buf_size.to_string()));
             },
 
             ("reg_exit_gateway", [connected_name, gateway]) => {
@@ -83,7 +84,30 @@ impl Program {
         }
     }
 
+    pub fn gateway_field(&self, name: &String, alphabet: &String, clock: &String, buf_size: &String) -> proc_macro2::TokenStream {
+        let field_name = format_ident!("gateway_{}", name.to_case(Case::Snake));
+        let char_rep_name = format_ident!("CharRep{}", alphabet.to_case(Case::Pascal));
+        let moment_rep_name = format_ident!("ClockRep{}", clock.to_case(Case::Pascal));
+        let buf_size_lit: proc_macro2::TokenStream = buf_size.parse().unwrap();
+
+        quote! {
+            pub #field_name: Stream<#char_rep_name, #moment_rep_name, #buf_size_lit>,
+        }
+    }
+
     pub fn generate(&self) -> Result<String, String> {
-        Ok("".to_string())
+        let struct_name = format_ident!("Program{}", self.name.to_case(Case::Pascal));
+        let gateways: Vec<_> = self.gateways.iter().map(|(name, alphabet, clock, buf_size)| self.gateway_field(name, alphabet, clock, buf_size)).collect();
+
+        let formatted = rustfmt_wrapper::rustfmt(quote! {
+            pub struct #struct_name {
+                #(#gateways)*
+            }
+        });
+
+        match formatted {
+            Ok(formatted_str) => Ok(formatted_str),
+            err => Err(format!("Error generating Program({}):\n{:?}", self.name, err))
+        }
     }
 }

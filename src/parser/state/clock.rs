@@ -39,9 +39,11 @@ impl Clock {
         let moment_rep = format_ident!("{}", if let Some(ct) = self.moment_type.as_ref() { ct.clone() } else {
             return Err(format!("Never called set_moment_type on Clock ({})", self.name).to_string())
         });
+        let moment_rep_name = format_ident!("ClockRep{}", self.name.to_case(Case::Pascal));
 
         let formatted = rustfmt_wrapper::rustfmt(quote! {
-            struct #struct_name {}
+            pub struct #struct_name {}
+            type #moment_rep_name = #moment_rep;
 
             impl #struct_name {
                 const fn to_moment(rep: #moment_rep) -> ClockMoment<#moment_rep> {

@@ -34,6 +34,7 @@ impl Alphabet {
             return Err(format!("Never called set_char_type on Alphabet ({})", self.name).to_string())
         });
 
+        let char_rep_name = format_ident!("CharRep{}", self.name.to_case(Case::Pascal));
         let char_enum_name = format_ident!("Char{}", self.name.to_case(Case::Pascal));
         let struct_name = format_ident!("Alphabet{}", self.name.to_case(Case::Pascal));
 
@@ -55,11 +56,12 @@ impl Alphabet {
         }).collect();
 
         let formatted = rustfmt_wrapper::rustfmt(quote! {
+            type #char_rep_name = #char_rep;
             pub enum #char_enum_name {
                 #(#char_enums)*
             }
 
-            struct #struct_name {}
+            pub struct #struct_name {}
             impl #struct_name {
                 const fn to_char(rep: #char_rep) -> Result<#char_enum_name, AlphabetError<#char_rep>> {
                     use #char_enum_name::*;

@@ -41,8 +41,8 @@ set_clock_repr      QUANTITY;
 
 # --- Programs ---
 # Quick explanation of functions:
-# reg_gateway       NAME,ALPHABET,CLOCK         - Register an input stream (Input of program)
-# reg_exit          NAME,ALPHABET,CLOCK         - Register an exit stream (Output of program)
+# reg_gateway       NAME,ALPHABET,CLOCK,BUF     - Register an input stream (Input of program) with BUF buffer size
+# reg_exit          NAME,ALPHABET,CLOCK,BUF     - Register an exit stream (Output of program) with BUF buffer size
 # start_moment      INITIAL_MOMENT,EXIT         - Defines the "initial" moment that your exit clock will start at
 # push_char         CHAR,EXIT                   - Push a character onto the exit stream - can either directly be a character from the related alphabet or a hexadecimal representation of bits.
 # push_moment       INCREMENT_BY,EXIT           - Push a time marker onto the exit stream, representing INCREMENTED_BY moments passing
@@ -57,7 +57,7 @@ defprogram hello_world;
 # Outputs "Hello, World!" in ASCII, within a single moment of time
 
 # Exits: Output stream for the program
-reg_exit            A,ASCII,CounterClock;
+reg_exit            A,ASCII,CounterClock,0x50;
 
 # All streams have clocks. What moment does this one start at?
 start_moment        0,A;
@@ -88,10 +88,10 @@ defprogram sync2;
 #  Exit C:    |1 |2 B |3 D |4 |5
 #  Exit D:    |1 A |2 B |3 D |4 |5 E
 
-reg_gateway         A,ASCII,GenClock(A);
-reg_gateway         B,ASCII,GenClock(A);
-reg_exit            C,ASCII,GenClock(A);
-reg_exit            D,ASCII,GenClock(A);
+reg_gateway         A,ASCII,CounterClock,0x50;
+reg_gateway         B,ASCII,CounterClock,0x50;
+reg_exit            C,ASCII,CounterClock,0x50;
+reg_exit            D,ASCII,CounterClock,0x50;
 
 label main;
 jlt                 a_earlier,Time(A),Time(B);
@@ -119,9 +119,9 @@ defprogram zip2;
 # Gateway B:    1| B 3| D
 # Exit C:       1| AB 3| CD 4| E
 
-reg_gateway         A,GenAlphabet(A),GenClock(A);
-reg_gateway         B,GenAlphabet(A),GenClock(A);
-reg_exit            E,GenAlphabet(A),GenClock(A);
+reg_gateway         A,ASCII,CounterClock,0x50;
+reg_gateway         B,ASCII,CounterClock,0x50;
+reg_exit            E,ASCII,CounterClock,0x50;
 
 connect             sync2(A|B),SYNCED;
 reg_exit_gateway    SYNCED(C),C;
