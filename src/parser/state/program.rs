@@ -2,25 +2,39 @@ use quote::{format_ident, quote};
 use convert_case::{Case, Casing};
 
 #[derive(Debug)]
-pub enum Instruction {
-    StartMoment(String, String),
-    PushMoment(String, String),
-    PushChar(String, String),
-    PushVal(String, String),
+pub enum ArgType {
+    Name(String),
     Label(String),
-    JumpLessThan(String, String, String),
-    JumpGreaterThan(String, String, String),
-    ForwardDuration(String, String),
-    Connect(String, String),
-    ExitGateway(String, String)
+    Gateway(String),
+    Exit(String),
+    Alphabet(String),
+    Clock(String),
+    Moment(String),
+    Character(String),
+    Number(String),
+    Program(String)
+}
+
+#[derive(Debug)]
+pub enum Instruction {
+    StartMoment(ArgType, ArgType),
+    PushMoment(ArgType, ArgType),
+    PushChar(ArgType, ArgType),
+    PushVal(ArgType, ArgType),
+    Label(ArgType),
+    JumpEarlier(ArgType, ArgType, ArgType),
+    JumpLater(ArgType, ArgType, ArgType),
+    ForwardDuration(ArgType, ArgType),
+    Connect(ArgType, ArgType),
+    ExitGateway(ArgType, ArgType)
 }
 
 #[derive(Debug)]
 pub struct Program {
     name: String,
-    instructions: Vec<(String, Vec<Instruction>)>,
-    gateways: Vec<(String, String, String, String)>,
-    exits: Vec<(String, String, String, String)>
+    instructions: Vec<(ArgType, Vec<Instruction>)>,
+    gateways: Vec<(ArgType, ArgType, ArgType, ArgType)>,
+    exits: Vec<(ArgType, ArgType, ArgType, ArgType)>
 }
 
 impl Program {
@@ -35,58 +49,58 @@ impl Program {
 
     pub fn process_command(&mut self, filename: &str, lineno: usize, cmd: &str, args: &[&str]) {
         if self.instructions.len() == 0 {
-            self.instructions.push(("root".to_string(), vec![]));
+            self.instructions.push((ArgType::Name("root".to_string()), vec![]));
         }
 
         let latest_func = self.instructions.last_mut().unwrap();
 
         match (cmd, args) {
             ("start_moment", [moment, exit]) => {
-                latest_func.1.push(Instruction::StartMoment(moment.to_string(), exit.to_string()));
+                latest_func.1.push(Instruction::StartMoment(ArgType::Moment(moment.to_string()), ArgType::Exit(exit.to_string())));
             },
 
             ("reg_gateway", [name, alphabet, clock, buf_size]) => {
-                self.gateways.push((name.to_string(), alphabet.to_string(), clock.to_string(), buf_size.to_string()));
+                self.gateways.push((ArgType::Name(name.to_string()), ArgType::Alphabet(alphabet.to_string()), ArgType::Clock(clock.to_string()), ArgType::Number(buf_size.to_string())));
             },
 
             ("reg_exit", [name, alphabet, clock, buf_size]) => {
-                self.exits.push((name.to_string(), alphabet.to_string(), clock.to_string(), buf_size.to_string()));
+                self.exits.push((ArgType::Name(name.to_string()), ArgType::Alphabet(alphabet.to_string()), ArgType::Clock(clock.to_string()), ArgType::Number(buf_size.to_string())));
             },
 
             ("reg_exit_gateway", [connected_name, gateway]) => {
-                latest_func.1.push(Instruction::ExitGateway(connected_name.to_string(), gateway.to_string()));
+                latest_func.1.push(Instruction::ExitGateway(ArgType::Exit(connected_name.to_string()), ArgType::Gateway(gateway.to_string())));
             },
 
             ("label", [name]) => {
-                latest_func.1.push(Instruction::Label(name.to_string()));
+                latest_func.1.push(Instruction::Label(ArgType::Name(name.to_string())));
             },
 
-            ("jlt", [label_name, a, b]) => {
-                latest_func.1.push(Instruction::JumpLessThan(label_name.to_string(), a.to_string(), b.to_string()));
+            ("jump_earlier", [label_name, a, b]) => {
+                latest_func.1.push(Instruction::JumpEarlier(ArgType::Label(label_name.to_string()), ArgType::Gateway(a.to_string()), ArgType::Gateway(b.to_string())));
             },
 
-            ("jgt", [label_name, a, b]) => {
-                latest_func.1.push(Instruction::JumpGreaterThan(label_name.to_string(), a.to_string(), b.to_string()));
+            ("jump_later", [label_name, a, b]) => {
+                latest_func.1.push(Instruction::JumpLater(ArgType::Label(label_name.to_string()), ArgType::Gateway(a.to_string()), ArgType::Gateway(b.to_string())));
             },
 
             ("push_moment", [moment_incr, exit]) => {
-                latest_func.1.push(Instruction::PushMoment(moment_incr.to_string(), exit.to_string()));
+                latest_func.1.push(Instruction::PushMoment(ArgType::Moment(moment_incr.to_string()), ArgType::Exit(exit.to_string())));
             },
 
             ("push_char", [chr, exit]) => {
-                latest_func.1.push(Instruction::PushChar(chr.to_string(), exit.to_string()));
+                latest_func.1.push(Instruction::PushChar(ArgType::Character(chr.to_string()), ArgType::Exit(exit.to_string())));
             },
 
             ("push_val", [chr, exit]) => {
-                latest_func.1.push(Instruction::PushVal(chr.to_string(), exit.to_string()));
+                latest_func.1.push(Instruction::PushVal(ArgType::Character(chr.to_string()), ArgType::Exit(exit.to_string())));
             },
 
             ("forward_duration", [gateway, exit]) => {
-                latest_func.1.push(Instruction::ForwardDuration(gateway.to_string(), exit.to_string()));
+                latest_func.1.push(Instruction::ForwardDuration(ArgType::Gateway(gateway.to_string()), ArgType::Exit(exit.to_string())));
             },
 
             ("connect", [program, name]) => {
-                latest_func.1.push(Instruction::Connect(program.to_string(), name.to_string()));
+                latest_func.1.push(Instruction::Connect(ArgType::Program(program.to_string()), ArgType::Name(name.to_string())));
             },
 
             _ => {
@@ -119,9 +133,12 @@ impl Program {
 
     pub fn instruction_call(&self, instruction: &Instruction) -> proc_macro2::TokenStream {
         match instruction {
-            Instruction::PushChar(chr, exit_name) => {
-                let (_, alphabet, _, _) = self.exits.iter().find(|(name, _, _, _)| {
-                    name == exit_name
+            Instruction::PushChar(ArgType::Character(chr), ArgType::Exit(exit_name)) => {
+                let alphabet = self.exits.iter().find_map(|(name, alphabet, _, _)| {
+                    match (name, alphabet) {
+                        (ArgType::Name(name), ArgType::Alphabet(alphabet)) if name == exit_name => Some(alphabet),
+                        _ => None
+                    }
                 }).unwrap_or_else(|| {
                     panic!("Could not find Exit ({}) for Program ({})", exit_name, self.name);
                 });
@@ -136,7 +153,13 @@ impl Program {
                 }
             },
 
-            _ => quote!{}
+            instr => {
+                let error_message = format!("Not implemented: {:?}", instr);
+
+                quote!{
+                    compile_error!(#error_message);
+                }
+            }
         }
     }
 
@@ -153,9 +176,32 @@ impl Program {
 
     pub fn generate(&self) -> Result<String, String> {
         let struct_name = format_ident!("Program{}", self.name.to_case(Case::Pascal));
-        let gateways: Vec<_> = self.gateways.iter().map(|(name, alphabet, clock, buf_size)| self.gateway_field(name, alphabet, clock, buf_size)).collect();
-        let exits: Vec<_> = self.exits.iter().map(|(name, alphabet, clock, buf_size)| self.exit_field(name, alphabet, clock, buf_size)).collect();
-        let funcs: Vec<_> = self.instructions.iter().map(|(name, instructions)| self.func_def(name, instructions)).collect();
+        let gateways: Vec<_> = self.gateways.iter().map(|gateway_data| {
+            match gateway_data {
+                (ArgType::Name(name), ArgType::Alphabet(alphabet), ArgType::Clock(clock), ArgType::Number(buf_size)) => {
+                    self.gateway_field(name, alphabet, clock, buf_size)
+                },
+
+                _ => panic!("Unexpected reg_gateway params: {:?}", gateway_data)
+            }
+        }).collect();
+
+        let exits: Vec<_> = self.exits.iter().map(|exit_data| {
+            match exit_data {
+                (ArgType::Name(name), ArgType::Alphabet(alphabet), ArgType::Clock(clock), ArgType::Number(buf_size)) => {
+                    self.exit_field(name, alphabet, clock, buf_size)
+                },
+
+                _ => panic!("Unexpected reg_exit params: {:?}", exit_data)
+            }
+        }).collect();
+
+        let funcs: Vec<_> = self.instructions.iter().map(|func_data| {
+            match func_data {
+                (ArgType::Name(name), instructions) => self.func_def(name, instructions),
+                _ => panic!("Unexpected label data: {:?}", func_data)
+            }
+        }).collect();
 
         let formatted = rustfmt_wrapper::rustfmt(quote! {
             pub struct #struct_name {

@@ -168,8 +168,8 @@ set_clock_repr      QUANTITY;
 # push_char         CHAR,EXIT                   - Push a character onto the exit stream - can either directly be a character from the related alphabet or a hexadecimal representation of bits.
 # push_moment       INCREMENT_BY,EXIT           - Push a time marker onto the exit stream, representing INCREMENTED_BY moments passing
 # label             LABEL;                      - A nice label to make it easier to define jumps
-# jlt               LABEL,TIME,TIME             - Jumps to a given label, if A is earlier than B - Can only jump *forward* in the program
-# jgt               LABEL,TIME,TIME             - Jumps to a given label, if A is later than B - Can only jump *forward* in the program
+# jump_earlier      LABEL,GATEWAY,GATEWAY       - Jumps to a given label, if A is earlier than B - Can only jump *forward* in the program
+# jump_later        LABEL,GATEWAY,GATEWAY       - Jumps to a given label, if A is later than B - Can only jump *forward* in the program
 # forward_duration  GATEWAY,EXIT                - Pops characters off of GATEWAY until it hits the next duration, while PUSHing each of those characters to EXIT
 # connect           PROGRAM(GATEWAY...),NAME    - Forwards GATEWAYs to PROGRAM. Exits of the program can be pulled from NAME
 # reg_exit_gateway  NAME(EXIT),NAME             - Registers a new Gateway, from the Exit of the connected program
@@ -215,22 +215,22 @@ reg_exit            C,ASCII,CounterClock,0x50;
 reg_exit            D,ASCII,CounterClock,0x50;
 
 label main;
-jlt                 a_earlier,Time(A),Time(B);
-jgt                 a_later,Time(A),Time(B);
+jump_earlier        a_earlier,A,B;
+jump_later          a_later,A,B;
 forward_duration    A,C;
-push_moment         Time(A),C;
+push_moment         A,C;
 forward_duration    B,D;
-push_moment         Time(B),D;
+push_moment         B,D;
 
 label a_earlier;
-push_moment         Time(A),D;
+push_moment         A,D;
 forward_duration    A,C;
-push_moment         Time(A),C;
+push_moment         A,C;
 
 label a_later;
-push_moment         Time(B),C;
+push_moment         B,C;
 forward_duration    B,D;
-push_moment         Time(B),D;
+push_moment         B,D;
 
 defprogram zip2;
 # Interleaves two streams of data - if both occurred in the same moment, the first stream's data comes first.
