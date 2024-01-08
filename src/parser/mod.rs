@@ -46,8 +46,6 @@ impl<'a> Parser<'a> {
 
     pub fn generate(&self) -> Result<String, String> {
         let header_code = rustfmt_wrapper::rustfmt(quote! {
-            #![no_std]
-
             use core::default::Default;
             use core::fmt::Debug;
         }).unwrap_or_else(|val| {
@@ -155,6 +153,17 @@ impl<'a> Parser<'a> {
             }
 
             impl<Alphabet: AlphabetLike, Clock: ClockLike, const BUFFER_SIZE: usize> Stream<Alphabet, Clock, BUFFER_SIZE> {
+                pub const fn new() -> Self {
+                    Self {
+                        buffer: [StreamItem::Empty; BUFFER_SIZE],
+                        idx: 0,
+                        buffered_total: 0,
+                        buffered_moments: 0,
+                        buffered_characters: 0,
+                        last_seen_moment: None
+                    }
+                }
+
                 fn inc_index(&mut self) {
                     self.idx = (self.idx + 1) % BUFFER_SIZE;
                 }

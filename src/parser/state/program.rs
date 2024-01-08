@@ -124,6 +124,17 @@ impl Program {
         }
     }
 
+    pub fn initialize_gateway_field(&self, name: &String, alphabet: &String, clock: &String, buf_size: &String) -> proc_macro2::TokenStream {
+        let field_name = format_ident!("gateway_{}", name.to_case(Case::Snake));
+        let alphabet_name = format_ident!("Alphabet{}", alphabet.to_case(Case::Pascal));
+        let clock_name = format_ident!("Clock{}", clock.to_case(Case::Pascal));
+        let buf_size_lit: proc_macro2::TokenStream = buf_size.parse().unwrap();
+
+        quote! {
+            #field_name: <Stream<#alphabet_name, #clock_name, #buf_size_lit>>::new(),
+        }
+    }
+
     pub fn exit_field(&self, name: &String, alphabet: &String, clock: &String, buf_size: &String) -> proc_macro2::TokenStream {
         let field_name = format_ident!("exit_{}", name.to_case(Case::Snake));
         let alphabet_name = format_ident!("Alphabet{}", alphabet.to_case(Case::Pascal));
@@ -132,6 +143,17 @@ impl Program {
 
         quote! {
             pub #field_name: Stream<#alphabet_name, #clock_name, #buf_size_lit>,
+        }
+    }
+
+    pub fn initialize_exit_field(&self, name: &String, alphabet: &String, clock: &String, buf_size: &String) -> proc_macro2::TokenStream {
+        let field_name = format_ident!("exit_{}", name.to_case(Case::Snake));
+        let alphabet_name = format_ident!("Alphabet{}", alphabet.to_case(Case::Pascal));
+        let clock_name = format_ident!("Clock{}", clock.to_case(Case::Pascal));
+        let buf_size_lit: proc_macro2::TokenStream = buf_size.parse().unwrap();
+
+        quote! {
+            #field_name: <Stream<#alphabet_name, #clock_name, #buf_size_lit>>::new(),
         }
     }
 
@@ -368,10 +390,30 @@ impl Program {
             }
         }).collect();
 
+        let initialize_gateways: Vec<_> = self.gateways.iter().map(|gateway_data| {
+            match gateway_data {
+                (ArgType::Name(name), ArgType::Alphabet(alphabet), ArgType::Clock(clock), ArgType::Number(buf_size)) => {
+                    self.initialize_gateway_field(name, alphabet, clock, buf_size)
+                },
+
+                _ => panic!("Unexpected reg_gateway params: {:?}", gateway_data)
+            }
+        }).collect();
+
         let exits: Vec<_> = self.exits.iter().map(|exit_data| {
             match exit_data {
                 (ArgType::Name(name), ArgType::Alphabet(alphabet), ArgType::Clock(clock), ArgType::Number(buf_size)) => {
                     self.exit_field(name, alphabet, clock, buf_size)
+                },
+
+                _ => panic!("Unexpected reg_exit params: {:?}", exit_data)
+            }
+        }).collect();
+
+        let initialize_exits: Vec<_> = self.exits.iter().map(|exit_data| {
+            match exit_data {
+                (ArgType::Name(name), ArgType::Alphabet(alphabet), ArgType::Clock(clock), ArgType::Number(buf_size)) => {
+                    self.initialize_exit_field(name, alphabet, clock, buf_size)
                 },
 
                 _ => panic!("Unexpected reg_exit params: {:?}", exit_data)
@@ -392,6 +434,13 @@ impl Program {
             }
 
             impl #struct_name {
+                pub const fn new() -> Self {
+                    Self {
+                        #(#initialize_gateways)*
+                        #(#initialize_exits)*
+                    }
+                }
+
                 #(#funcs)*
             }
         });
