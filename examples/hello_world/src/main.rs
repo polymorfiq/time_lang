@@ -284,5 +284,17 @@ fn main() {
 
 #[cfg(not(feature = "transpile"))]
 fn main() {
-    let prog = transpiled::ProgramHelloWorld::new();
+    use transpiled::GatewayLike;
+    let mut prog = transpiled::ProgramHelloWorld::new();
+    prog.label_root();
+
+    match prog.exit_a.pop() {
+        transpiled::StreamItem::Character(chr) => {
+            println!("GOT IT! {:?}", chr);
+        }
+
+        other => {
+            println!("WHAT IS THIS?! {:?}", other);
+        }
+    }
 }

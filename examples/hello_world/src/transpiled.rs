@@ -117,10 +117,10 @@ impl<Alphabet: AlphabetLike, Clock: ClockLike, const BUFFER_SIZE: usize> ExitLik
     }
     fn push(&mut self, chr: Alphabet::CharEnum) -> Result<(), ExitError> {
         if self.accepting_pushes() {
-            self.buffer[self.idx] = Self::InternalItem::Character(Alphabet::to_val(chr));
+            self.buffer[self.idx + self.buffered_total % BUFFER_SIZE] =
+                Self::InternalItem::Character(Alphabet::to_val(chr));
             self.buffered_characters += 1;
             self.buffered_total += 1;
-            self.inc_index();
             Ok(())
         } else {
             Err(ExitError::BufferFull)
@@ -128,10 +128,10 @@ impl<Alphabet: AlphabetLike, Clock: ClockLike, const BUFFER_SIZE: usize> ExitLik
     }
     fn push_moment(&mut self, moment: Clock::MomentRep) -> Result<(), ExitError> {
         if self.accepting_pushes() {
-            self.buffer[self.idx] = Self::InternalItem::Moment(moment);
+            self.buffer[self.idx + self.buffered_total % BUFFER_SIZE] =
+                Self::InternalItem::Moment(moment);
             self.buffered_moments += 1;
             self.buffered_total += 1;
-            self.inc_index();
             Ok(())
         } else {
             Err(ExitError::BufferFull)
@@ -145,9 +145,9 @@ impl<Alphabet: AlphabetLike, Clock: ClockLike, const BUFFER_SIZE: usize>
     type Item = StreamItem<Alphabet::CharEnum, Clock::MomentRep>;
     fn pop(&mut self) -> Self::Item {
         let last = core::mem::take(&mut self.buffer[self.idx]);
-        self.inc_index();
         match last {
             Self::InternalItem::Character(chr) => {
+                self.inc_index();
                 self.buffered_characters -= 1;
                 self.buffered_total -= 1;
                 Self::Item::Character(Alphabet::to_char(chr).unwrap_or_else(|err| {
@@ -155,6 +155,7 @@ impl<Alphabet: AlphabetLike, Clock: ClockLike, const BUFFER_SIZE: usize>
                 }))
             }
             Self::InternalItem::Moment(moment) => {
+                self.inc_index();
                 self.buffered_moments -= 1;
                 self.buffered_total -= 1;
                 self.last_seen_moment = Some(moment);
