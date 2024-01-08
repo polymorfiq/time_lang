@@ -167,6 +167,7 @@ set_clock_repr      QUANTITY;
 # start_moment      INITIAL_MOMENT,EXIT         - Defines the "initial" moment that your exit clock will start at
 # push_char         CHAR,EXIT                   - Push a character onto the exit stream - can either directly be a character from the related alphabet or a hexadecimal representation of bits.
 # push_moment       INCREMENT_BY,EXIT           - Push a time marker onto the exit stream, representing INCREMENTED_BY moments passing
+# forward_moment    GATEWAY,EXIT                - Pop a time token off Gateway and push it to Exit
 # label             LABEL;                      - A nice label to make it easier to define jumps
 # jump_earlier      LABEL,GATEWAY,GATEWAY       - Jumps to a given label, if A is earlier than B - Can only jump *forward* in the program
 # jump_later        LABEL,GATEWAY,GATEWAY       - Jumps to a given label, if A is later than B - Can only jump *forward* in the program
@@ -218,19 +219,19 @@ label main;
 jump_earlier        a_earlier,A,B;
 jump_later          a_later,A,B;
 forward_duration    A,C;
-push_moment         A,C;
+forward_moment      A,C;
 forward_duration    B,D;
-push_moment         B,D;
+forward_moment      B,D;
 
 label a_earlier;
-push_moment         A,D;
+forward_moment      A,D;
 forward_duration    A,C;
-push_moment         A,C;
+forward_moment      A,C;
 
 label a_later;
-push_moment         B,C;
+forward_moment      B,C;
 forward_duration    B,D;
-push_moment         B,D;
+forward_moment      B,D;
 
 defprogram zip2;
 # Interleaves two streams of data - if both occurred in the same moment, the first stream's data comes first.

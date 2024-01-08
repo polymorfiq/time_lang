@@ -19,9 +19,9 @@ pub enum ArgType {
 pub enum Instruction {
     StartMoment(ArgType, ArgType),
     PushMoment(ArgType, ArgType),
+    ForwardMoment(ArgType, ArgType),
     PushChar(ArgType, ArgType),
     PushVal(ArgType, ArgType),
-    Label(ArgType),
     JumpEarlier(ArgType, ArgType, ArgType),
     JumpLater(ArgType, ArgType, ArgType),
     ForwardDuration(ArgType, ArgType),
@@ -72,7 +72,7 @@ impl Program {
             },
 
             ("label", [name]) => {
-                latest_func.1.push(Instruction::Label(ArgType::Name(name.to_string())));
+                self.instructions.push((ArgType::Name(name.to_string()), vec![]));
             },
 
             ("jump_earlier", [label_name, a, b]) => {
@@ -87,12 +87,16 @@ impl Program {
                 latest_func.1.push(Instruction::PushMoment(ArgType::Moment(moment_incr.to_string()), ArgType::Exit(exit.to_string())));
             },
 
+            ("forward_moment", [gateway, exit]) => {
+                latest_func.1.push(Instruction::ForwardMoment(ArgType::Gateway(gateway.to_string()), ArgType::Exit(exit.to_string())));
+            },
+
             ("push_char", [chr, exit]) => {
                 latest_func.1.push(Instruction::PushChar(ArgType::Character(chr.to_string()), ArgType::Exit(exit.to_string())));
             },
 
             ("push_val", [chr, exit]) => {
-                latest_func.1.push(Instruction::PushVal(ArgType::Character(chr.to_string()), ArgType::Exit(exit.to_string())));
+                latest_func.1.push(Instruction::PushVal(ArgType::Number(chr.to_string()), ArgType::Exit(exit.to_string())));
             },
 
             ("forward_duration", [gateway, exit]) => {
@@ -132,8 +136,71 @@ impl Program {
     }
 
     pub fn instruction_call(&self, instruction: &Instruction) -> proc_macro2::TokenStream {
+        use Instruction::*;
+
         match instruction {
-            Instruction::PushChar(ArgType::Character(chr), ArgType::Exit(exit_name)) => {
+            StartMoment(ArgType::Moment(moment), ArgType::Exit(exit_name)) => {
+                let exit_field = format_ident!("exit_{}", exit_name.to_case(Case::Snake));
+                let moment_lit: proc_macro2::TokenStream = moment.parse().unwrap();
+
+                quote! {
+                    self.#exit_field.set_initial_moment(#moment_lit);
+                }
+            }
+            
+            PushMoment(ArgType::Moment(moment), ArgType::Exit(exit_name)) => {
+                let exit_field = format_ident!("exit_{}", exit_name.to_case(Case::Snake));
+                let moment_lit: proc_macro2::TokenStream = moment.parse().unwrap();
+                let push_error = format!("Could not push_moment to Exit ({})", exit_name);
+
+                quote! {
+                    self.#exit_field.push_moment(#moment_lit).expect(#push_error);
+                }
+            }
+            
+            ForwardMoment(ArgType::Gateway(gateway_name), ArgType::Exit(exit_name)) => {
+                let gateway_field = format_ident!("gateway_{}", gateway_name.to_case(Case::Snake));
+                let exit_field = format_ident!("exit_{}", exit_name.to_case(Case::Snake));
+                let push_moment_fail_msg = format!("Failed to forward moment from Gateway {} to Exit {}", gateway_name, exit_name);
+
+                quote! {
+                    if self.#gateway_field.next_is_moment() {
+                        match self.#gateway_field.pop() {
+                            StreamItem::Moment(moment) => {
+                                self.#exit_field.push_moment(moment).expect(#push_moment_fail_msg);
+                            }
+                            _ => {
+                                panic!("Unreachable Code - unexpectedly popped a non-moment when calling forward_moment()");
+                            }
+                        }
+                    } else {
+                        panic!("Tried to forward_moment from {} to {} when the next item in the gateway, is not a Moment", #gateway_name, #exit_name)
+                    }
+                }
+            }
+
+            PushVal(ArgType::Number(val), ArgType::Exit(exit_name)) => {
+                let exit_field = format_ident!("exit_{}", exit_name.to_case(Case::Snake));
+                let val_lit: proc_macro2::TokenStream = val.parse().unwrap();
+
+                let alphabet = self.exits.iter().find_map(|(name, alphabet, _, _)| {
+                    match (name, alphabet) {
+                        (ArgType::Name(name), ArgType::Alphabet(alphabet)) if name == exit_name => Some(alphabet),
+                        _ => None
+                    }
+                }).unwrap_or_else(|| {
+                    panic!("Could not find Exit ({}) for Program ({})", exit_name, self.name);
+                });
+                let alphabet_name = format_ident!("Alphabet{}", alphabet.to_case(Case::Pascal));
+                let error_message = format!("No character found in Alphabet ({}): {:?}", alphabet, val);
+                let push_error = format!("Could not push_val to Exit ({})", exit_name);
+                
+                quote! {
+                    self.#exit_field.push(#alphabet_name::to_char(#val_lit).expect(#error_message)).expect(#push_error);
+                }
+            }
+
+            PushChar(ArgType::Character(chr), ArgType::Exit(exit_name)) => {
                 let alphabet = self.exits.iter().find_map(|(name, alphabet, _, _)| {
                     match (name, alphabet) {
                         (ArgType::Name(name), ArgType::Alphabet(alphabet)) if name == exit_name => Some(alphabet),
@@ -153,6 +220,121 @@ impl Program {
                 }
             },
 
+            ForwardDuration(ArgType::Gateway(gateway_name), ArgType::Exit(exit_name)) => {
+                let gateway_field = format_ident!("gateway_{}", gateway_name.to_case(Case::Snake));
+                let exit_field = format_ident!("exit_{}", exit_name.to_case(Case::Snake));
+
+                let push_fail_msg = format!("Failed to forward character from Gateway {} to Exit {}", gateway_name, exit_name);
+                let push_moment_fail_msg = format!("Failed to forward moment from Gateway {} to Exit {}", gateway_name, exit_name);
+
+                quote!{
+                    loop {
+                        match self.#gateway_field.pop() {
+                            StreamItem::Character(chr) => {
+                                self.#exit_field.push(chr).expect(#push_fail_msg);
+                            }
+
+                            StreamItem::Moment(moment) => {
+                                self.#exit_field.push_moment(moment).expect(#push_moment_fail_msg);
+                                break;
+                            }
+
+                            StreamItem::Empty => {
+                                continue
+                            }
+                        }
+                    }
+                }
+            },
+
+            JumpEarlier(ArgType::Label(label), ArgType::Gateway(gateway_a), ArgType::Gateway(gateway_b)) => {
+                let label_func = format_ident!("label_{}", label.to_case(Case::Snake));
+                let gateway_a_field = format_ident!("gateway_{}", gateway_a.to_case(Case::Snake));
+                let gateway_b_field = format_ident!("gateway_{}", gateway_b.to_case(Case::Snake));
+
+                let clock_a = self.gateways.iter().find_map(|(name, _, clock, _)| {
+                    match (name, clock) {
+                        (ArgType::Name(name), ArgType::Clock(clock)) if name == gateway_a => Some(format_ident!("Clock{}", clock)),
+                        _ => None
+                    }
+                }).unwrap_or_else(|| {
+                    panic!("Could not find Gateway ({}) for Program ({})", gateway_a, self.name);
+                });
+
+                let clock_b = self.gateways.iter().find_map(|(name, _, clock, _)| {
+                    match (name, clock) {
+                        (ArgType::Name(name), ArgType::Clock(clock)) if name == gateway_b => Some(format_ident!("Clock{}", clock)),
+                        _ => None
+                    }
+                }).unwrap_or_else(|| {
+                    panic!("Could not find Gateway ({}) for Program ({})", gateway_b, self.name);
+                });
+
+                let clock_repr_error = format!("(Clock of) Gateway {} and (Clock of) Gateway {} being compared while not representing the same thing", gateway_a, gateway_b);
+
+                quote! {
+                    if #clock_a::represents() != #clock_b::represents() {
+                        panic!(#clock_repr_error);
+                    }
+
+                    match (self.#gateway_a_field.current_moment(), self.#gateway_b_field.current_moment()) {
+                        (None, Some(_)) => {
+                            return self.#label_func();
+                        }
+
+                        (Some(a), Some(b)) if a < b => {
+                            return self.#label_func();
+                        }
+
+                        _ => ()
+                    }
+                }
+            },
+
+            JumpLater(ArgType::Label(label), ArgType::Gateway(gateway_a), ArgType::Gateway(gateway_b)) => {
+                let label_func = format_ident!("label_{}", label.to_case(Case::Snake));
+                let gateway_a_field = format_ident!("gateway_{}", gateway_a.to_case(Case::Snake));
+                let gateway_b_field = format_ident!("gateway_{}", gateway_b.to_case(Case::Snake));
+
+                let clock_a = self.gateways.iter().find_map(|(name, _, clock, _)| {
+                    match (name, clock) {
+                        (ArgType::Name(name), ArgType::Clock(clock)) if name == gateway_a => Some(format_ident!("Clock{}", clock)),
+                        _ => None
+                    }
+                }).unwrap_or_else(|| {
+                    panic!("Could not find Gateway ({}) for Program ({})", gateway_a, self.name);
+                });
+
+                let clock_b = self.gateways.iter().find_map(|(name, _, clock, _)| {
+                    match (name, clock) {
+                        (ArgType::Name(name), ArgType::Clock(clock)) if name == gateway_b => Some(format_ident!("Clock{}", clock)),
+                        _ => None
+                    }
+                }).unwrap_or_else(|| {
+                    panic!("Could not find Gateway ({}) for Program ({})", gateway_b, self.name);
+                });
+
+                let clock_repr_error = format!("(Clock of) Gateway {} and (Clock of) Gateway {} being compared while not representing the same thing", gateway_a, gateway_b);
+
+                quote! {
+                    if #clock_a::represents() != #clock_b::represents() {
+                        panic!(#clock_repr_error);
+                    }
+
+                    match (self.#gateway_a_field.current_moment(), self.#gateway_b_field.current_moment()) {
+                        (Some(_), None) => {
+                            return self.#label_func();
+                        }
+
+                        (Some(a), Some(b)) if a > b => {
+                            return self.#label_func();
+                        }
+
+                        _ => ()
+                    }
+                }
+            }
+
             instr => {
                 let error_message = format!("Not implemented: {:?}", instr);
 
@@ -164,7 +346,7 @@ impl Program {
     }
 
     pub fn func_def(&self, name: &String, instructions: &Vec<Instruction>) -> proc_macro2::TokenStream {
-        let func_name = format_ident!("{}", name.to_case(Case::Snake));
+        let func_name = format_ident!("label_{}", name.to_case(Case::Snake));
         let instructions: Vec<_> = instructions.iter().map(|instruction| self.instruction_call(instruction)).collect();
 
         quote! {

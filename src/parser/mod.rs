@@ -76,19 +76,24 @@ impl<'a> Parser<'a> {
 
         let clock_code = rustfmt_wrapper::rustfmt(quote! {
             pub enum ClockMoment<MomentRep> {
+                UnixSeconds(MomentRep),
+                UnixMilliseconds(MomentRep),
                 Quantity(MomentRep)
             }
 
             pub trait ClockLike {
                 type MomentRep: Copy + Clone + Debug;
 
+                fn represents(&self) -> &str;
                 fn to_moment(rep: Self::MomentRep) -> ClockMoment<Self::MomentRep>;
             }
 
             pub trait AddableClockLike<MomentRep: core::ops::Add<Output = MomentRep>> {
                 fn add(moment: ClockMoment<MomentRep>, rep: MomentRep) -> ClockMoment<MomentRep> {
                     match moment {
-                        ClockMoment::Quantity(orig_rep) => ClockMoment::Quantity(orig_rep + rep)
+                        ClockMoment::Quantity(orig_rep) => ClockMoment::Quantity(orig_rep + rep),
+                        ClockMoment::UnixMilliseconds(orig_rep) => ClockMoment::UnixMilliseconds(orig_rep + rep),
+                        ClockMoment::UnixSeconds(orig_rep) => ClockMoment::UnixSeconds(orig_rep + rep)
                     }
                 }
             }
@@ -107,6 +112,7 @@ impl<'a> Parser<'a> {
                 type InternalItem;
                 type Item;
 
+                fn set_initial_moment(&mut self, monent: Clock::MomentRep);
                 fn accepting_pushes(&mut self) -> bool;
                 fn push(&mut self, chr: Alphabet::CharEnum) -> Result<(), ExitError>;
                 fn push_moment(&mut self, moment: Clock::MomentRep) -> Result<(), ExitError>;
@@ -123,6 +129,7 @@ impl<'a> Parser<'a> {
                 fn pop(&mut self) -> Self::Item;
                 fn forward_duration<Exit: ExitLike<Alphabet, Clock>>(&mut self, exit: &mut Exit) -> Result<(), ExitError>;
                 fn current_moment(&self) -> Option<Clock::MomentRep>;
+                fn is_empty(&self) -> bool;
                 fn next_is_character(&self) -> bool;
                 fn next_is_moment(&self) -> bool;
             }
@@ -156,6 +163,10 @@ impl<'a> Parser<'a> {
             impl<Alphabet: AlphabetLike, Clock: ClockLike, const BUFFER_SIZE: usize> ExitLike<Alphabet, Clock> for Stream<Alphabet, Clock, BUFFER_SIZE> {
                 type InternalItem = StreamItem<Alphabet::CharRep, Clock::MomentRep>;
                 type Item = StreamItem<Alphabet::CharEnum, Clock::MomentRep>;
+
+                fn set_initial_moment(&mut self, moment: Clock::MomentRep) {
+                    self.last_seen_moment = Some(moment);
+                }
 
                 fn accepting_pushes(&mut self) -> bool { self.buffered_total < BUFFER_SIZE }
 
@@ -238,6 +249,10 @@ impl<'a> Parser<'a> {
                     self.last_seen_moment
                 }
 
+                fn is_empty(&self) -> bool {
+                    self.buffered_total == 0
+                }
+
                 fn next_is_character(&self) -> bool {
                     match self.buffer[self.idx] {
                         Self::InternalItem::Character(_) => true,
@@ -266,7 +281,6 @@ impl<'a> Parser<'a> {
     }
 
     fn start_state(&mut self, state: State) {
-
         match self.state.generate() {
             Ok(generated_code) => {
                 self.source.push_str(generated_code.as_str());

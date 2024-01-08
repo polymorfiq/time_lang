@@ -33,6 +33,7 @@ impl Clock {
         let moment_enum = format_ident!("{}", if let Some(repr) = self.repr.as_ref() { repr.clone() } else {
             return Err(format!("Never called set_clock_repr on Clock ({})", self.name).to_string())
         }.to_case(Case::Pascal));
+        let repr_name = self.repr.as_ref().unwrap();
 
         let struct_name = format_ident!("Clock{}", self.name.to_case(Case::Pascal));
 
@@ -47,10 +48,14 @@ impl Clock {
                 const fn to_moment(rep: #moment_rep) -> ClockMoment<#moment_rep> {
                     ClockMoment::#moment_enum(rep)
                 }
+
+                const fn represents() -> &'static str { #repr_name }
             }
 
             impl ClockLike for #struct_name {
                 type MomentRep = #moment_rep;
+
+                fn represents(&self) -> &str { <#struct_name>::represents() }
 
                 fn to_moment(rep: #moment_rep) -> ClockMoment<#moment_rep> {
                     <#struct_name>::to_moment(rep)
