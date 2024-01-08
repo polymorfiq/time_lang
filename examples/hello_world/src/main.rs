@@ -284,17 +284,23 @@ fn main() {
 
 #[cfg(not(feature = "transpile"))]
 fn main() {
-    use transpiled::GatewayLike;
+    use transpiled::{GatewayLike, StreamItem};
     let mut prog = transpiled::ProgramHelloWorld::new();
     prog.label_root();
 
-    match prog.exit_a.pop() {
-        transpiled::StreamItem::Character(chr) => {
-            println!("GOT IT! {:?}", chr);
-        }
+    loop {
+        match prog.exit_a.pop() {
+            StreamItem::Character(chr) => {
+                println!("Character: {:?}", chr);
+            }
 
-        other => {
-            println!("WHAT IS THIS?! {:?}", other);
+            StreamItem::Moment(moment) => {
+                println!("Moment: {:?}", moment);
+            }
+
+            StreamItem::Empty => {
+                break;
+            }
         }
     }
 }
